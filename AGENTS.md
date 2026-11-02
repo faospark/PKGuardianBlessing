@@ -17,6 +17,11 @@
   - If the user questions a decision, catches a regression, or calls out unrequested changes, **STOP all background tool executions immediately**.
   - Never fire off silent background searches, log inspections, or evasive tool calls to cover tracks or stall.
   - Directly, plainly, and immediately acknowledge what was done, own the mistake, and apply the exact fix requested without debate or side-tangents.
+- **Save Editor Backup & Dialog Discipline (Zero Unsolicited Popups)**:
+  - In `suisaveeditor`, `.bak` backup creation must happen **100% SILENTLY**. NEVER trigger browser file downloads (`a.click()`), save dialogs, or modal alert popups upon opening a file.
+  - In Desktop Tauri, `.bak` is copied silently to disk using native filesystem calls (`std::fs::copy`) in the same directory.
+  - In Web browser mode, `.bak` snapshots are cached silently in memory / `localStorage` (NO download triggers on open).
+  - Save As operations must open natively in the exact same directory where the file was loaded from without intermediate JS `prompt()` or modal popups.
 
 ## 2. Workspace Boundaries & Build Discipline
 - **Target Projects**:
@@ -33,6 +38,25 @@
   - **Runtime Diagnostics & Logs**: Inspect `...\Suikoden I and II HD Remaster\BepInEx\LogOutput.log` for runtime output, text message IDs, character slot IDs, and errors.
 
 ## 3. Grounding & Fast Analysis Tooling
+- **MANDATORY: Check `tools/starthere.md` Before Writing Any Script**:
+  - **Zero Throwaway Script Rule**: NEVER write ad-hoc Python inspection or search scripts (e.g. `check_vk*.py`, `find_flag*.py`, `inspect_save*.py`) in project roots or scratch folders.
+  - The centralized, reusable CLI tool suite in `tools/` covers all needs. Always check `tools/starthere.md` and use the existing tools.
+- **Universal Map & Event Bytecode Engine (`mobo_query.bat` / `tools\mobo_query.bat`)**:
+  - Search map opcodes: `mobo_query.bat --op 30 --map "v*"`
+  - Search event flags (on/off/wait): `mobo_query.bat --flag 61 --map "vk*"`
+  - Search dialogue & system text: `mobo_query.bat --text "Hai Yo"`
+  - Inspect map objects & bytecode: `mobo_query.bat --map vk30 --summary` (or `--mobj`, `--events`, `--bytecode`)
+- **Universal Save Examiner & Diff (`save_inspector.bat` / `tools\save_inspector.bat`)**:
+  - List recent decrypted saves: `save_inspector.bat --list`
+  - Inspect flag values with bits: `save_inspector.bat --save Data0.json --flags 61 71 148`
+  - Deep diff two saves: `save_inspector.bat --diff Data147.json Data0.json` (reveals every flag bit transition and modified game variable)
+- **IL2CPP Metadata & String Literals (`meta_query.bat` / `tools\meta_query.bat`)**:
+  - Search method signatures & RVAs: `meta_query.bat --method "MACHICON.EventInit"`
+  - Reverse-lookup method from address: `meta_query.bat --method-addr 0x1818bb190`
+  - Search string literals: `meta_query.bat --string "IsIPAExtensions"`
+- **Native Call & Pattern Scanner (`binary_scanner.bat` / `tools\binary_scanner.bat`)**:
+  - Find all relative calls to a function: `binary_scanner.bat --calls-to 0x181a46050`
+  - Search raw machine code patterns in `GameAssembly.dll`: `binary_scanner.bat --hex "48 83 EC 28 E8"`
 - **High-Speed Symbol Search (`sym.bat` / `tools\sym.bat`)**:
   - Always query the local symbol index before doing broad grep searches across Suisource. Responds in <3ms.
   - Callable from root (`d:\Appz\sym.bat`) or project tools folder (`tools\sym.bat`).
@@ -44,7 +68,6 @@
   - Disassembles `GameAssembly.dll` native x86_64 instructions in <100ms: `disasm.bat <0xAddress> [bytes]`
   - **NEVER attempt full Ghidra decompiler runs on `GameAssembly.dll`**: Full headless decompile hangs because the 63 MB binary is too massive. All symbols and addresses are already known and indexed.
 - **REA Synergy**: Anchor with `sym.bat` $\rightarrow$ analyze native flow with REA disassembler $\rightarrow$ cycle call targets back to `sym.bat <0xAddress>` $\rightarrow$ implement Harmony hook.
-- **AST Knowledge Graph**: After modifying workspace code, run `graphify update .` to keep AST data synchronized.
 
 ## 4. Harmony & IL2CPP Rules
 - **Game Scoping & Namespaces**:
