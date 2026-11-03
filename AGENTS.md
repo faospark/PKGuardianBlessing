@@ -25,16 +25,16 @@
 
 ## 2. Workspace Boundaries & Build Discipline
 - **Target Projects**:
-  - All mod projects reside in `d:\Appz\` (`PKCore`, `PKButtonPrompts`, `PKRecruitmentPatch`, `PKBattlePatch`, `PKOpenPaths`, `PKRuneSagePlus`, `PKS1CastleStorageAnywhere`, `PKS2BathNPCPatch`, `PKTenzanPassPatch`).
+  - All mod projects reside in `d:\Appz\SuikodenModding\` (`PKCore`, `PKButtonPrompts`, `PKRecruitmentPatch`, `PKBattlePatch`, `PKOpenPaths`, `PKRuneSagePlus`, `PKS1CastleStorageAnywhere`, `PKS2BathNPCPatch`, `PKTenzanPassPatch`, `SquidFam`).
   - Code changes and builds target the specific mod project requested by the user.
 - **Read-Only References (Never Edit)**:
-  - `d:\Appz\Suisource\GSD1`, `GSD2`, `GSDShare` — decompiled game source, used only for grounding. Implement behavior changes as Harmony patches, never by editing decompiled sources.
-  - `d:\Appz\Suisource\Ideas` — notes/ideas, read for context only.
+  - `d:\Appz\SuikodenModding\Suisource\GSD1`, `GSD2`, `GSDShare` — decompiled game source, used only for grounding. Implement behavior changes as Harmony patches, never by editing decompiled sources.
+  - `d:\Appz\SuikodenModding\Suisource\Ideas` — notes/ideas, read for context only.
   - `...\Suikoden I and II HD Remaster\BepInEx` — game install and runtime output (logs, configs, textures). Do not write project code there.
 - **Build & Symlink Execution**:
   - The build output directory is symlinked directly to the game's BepInEx plugins directory (`...\BepInEx\plugins\`).
   - **NEVER** run manual `Copy-Item` or file copy commands to the game folder. Running `dotnet build` is sufficient.
-  - Build individual projects (`dotnet build PKCore\PKCore.csproj`) or the full suite (`dotnet build d:\Appz\SuikodenMods.sln`).
+  - Build individual projects (`dotnet build PKCore\PKCore.csproj`) or the full suite (`dotnet build d:\Appz\SuikodenModding\SuikodenMods.sln`).
   - **Runtime Diagnostics & Logs**: Inspect `...\Suikoden I and II HD Remaster\BepInEx\LogOutput.log` for runtime output, text message IDs, character slot IDs, and errors.
 
 ## 3. Grounding & Fast Analysis Tooling
