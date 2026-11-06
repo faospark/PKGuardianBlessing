@@ -24,6 +24,9 @@ public static class GuardianDeityRepeatRewardsPatch
     private static byte _plansBeforeCustomizer0 = 0;
     private static byte _plansBeforeCustomizer1 = 0;
     private static bool _customizerActive = false;
+    private static byte _lastObservedStep = 0;
+    private static byte _lastActiveStep = 0;
+    private static bool _statueConfirmedInWorkshop = false;
 
     public static void SetLastRewardedStatue(int comboId)
     {
@@ -164,6 +167,9 @@ public static class GuardianDeityRepeatRewardsPatch
                 _plansBeforeCustomizer0 = gw.game_data.parts_no[0];
                 _plansBeforeCustomizer1 = gw.game_data.parts_no[1];
                 _customizerActive = true;
+                _lastObservedStep = 0;
+                _lastActiveStep = 0;
+                _statueConfirmedInWorkshop = false;
             }
 
             LogState("h_shugo.Entry Prefix - Customizer opened");
@@ -175,9 +181,68 @@ public static class GuardianDeityRepeatRewardsPatch
     }
 
     /// <summary>
-    /// Hook Jude's statue customizer main update loop (h_shugo.ShugoMain).
+    /// Intercepts native eventFlgON calls.
+    /// When Jude's workshop confirms a statue build, native GameAssembly.dll unconditionally
+    /// executes OldSrcBase.eventFlgON(148, 0x10). Cancellation jumps to 0x1820b8eaf, never setting this flag.
+    /// </summary>
+    [HarmonyPatch(typeof(GSD2::OldSrcBase), "eventFlgON")]
+    [HarmonyPostfix]
+    public static void EventFlgON_Postfix(short fno, byte bno)
+    {
+        if (_customizerActive && fno == 148 && (bno & 0x10) != 0)
+        {
+            _statueConfirmedInWorkshop = true;
+            Plugin.Log.LogInfo("[GuardianDeity] Native statue confirmation detected (Flag 148 bit 0x10 set)!");
+        }
+    }
+
+    /// <summary>
+    /// Tracks active step transitions in Jude's statue customizer (h_shugo.ShugoMain).
+    /// Executed every frame while the customizer is open before shugo_work is freed on exit.
+    /// Step 0x5b = 'Quit creating statue?' dialog prompt.
+    /// Step 0x5c = Player selected 'Yes' (quit confirmed), transitioning to teardown (0x63).
+    /// Step 0x5d..0x5e = Player finished/confirmed statue build.
+    /// </summary>
+    [HarmonyPatch(typeof(GSD2::EventOverlayClass.h_shugo), "ShugoMain")]
+    [HarmonyPrefix]
+    public static void H_Shugo_ShugoMain_Prefix(GSD2::EventOverlayClass.h_shugo __instance)
+    {
+        if (!_customizerActive || __instance == null) return;
+
+        try
+        {
+            var work = __instance.shugo_work;
+            if (work == null) return;
+
+            byte step = work.step;
+            if (step != _lastObservedStep)
+            {
+                if (Plugin.Config.EnableDebugLogging.Value)
+                {
+                    Plugin.Log.LogInfo($"[GuardianDeity] [ShugoMain] Step transition: 0x{_lastObservedStep:X2} -> 0x{step:X2}");
+                }
+                _lastObservedStep = step;
+            }
+
+            if (step != 0x63)
+            {
+                _lastActiveStep = step;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (Plugin.Config.EnableDebugLogging.Value)
+            {
+                Plugin.Log.LogError($"[GuardianDeity] Error in ShugoMain prefix: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hook Jude's statue customizer main update loop completion (h_shugo.ShugoMain).
     /// Returns 1 when the player closes/exits the customization workshop.
-    /// Step 0x5b indicates the player selected Cancel ("Quit creating statue?").
+    /// In vanilla, shugo_work is set to null during Step 0x63 before returning 1,
+    /// so exit disposition is evaluated from native confirmation flag state.
     /// </summary>
     [HarmonyPatch(typeof(GSD2::EventOverlayClass.h_shugo), "ShugoMain")]
     [HarmonyPostfix]
@@ -195,48 +260,58 @@ public static class GuardianDeityRepeatRewardsPatch
             gw.game_data.parts_no[0] |= _plansBeforeCustomizer0;
             gw.game_data.parts_no[1] |= _plansBeforeCustomizer1;
 
-            ushort step = __instance?.shugo_work != null ? __instance.shugo_work.step : (ushort)0;
-            bool isCancelStep = (step == 0x5b);
+            // Native GameAssembly.dll calls eventFlgON(148, 0x10) exclusively when confirming a build.
+            // When the player cancels/quits, native code jumps past eventFlgON.
+            bool isCancelled = !_statueConfirmedInWorkshop;
 
-            if (_statueAssembledBeforeCustomizer == 0)
+            byte currentCombo = gw.game_data.parts_no[2];
+
+            if (isCancelled)
             {
-                // No statue was assembled prior to opening workshop
-                if (isCancelStep || !HasAnyBlueprints(gw))
+                Plugin.Log.LogInfo($"[GuardianDeity] Workshop Exit: CANCELLED (statueConfirmedInWorkshop=false, lastActiveStep=0x{_lastActiveStep:X2}, assembledBefore={_statueAssembledBeforeCustomizer})");
+
+                if (_statueAssembledBeforeCustomizer == 0)
                 {
-                    // Player cancelled: keep untouched stone rock
+                    // Player cancelled first statue creation: keep untouched stone rock
                     gw.game_data.parts_no[3] = 0;
                     gw.game_data.parts_no[2] = 0;
                     gw.eventFlgOFF(148, 0x10);
                     gw.eventFlgOFF(148, 0x20);
-                    LogState("h_shugo.ShugoMain Postfix - First statue creation cancelled; keeping untouched rock");
+                    LogState("First statue creation cancelled - keeping untouched rock");
                 }
                 else
                 {
-                    // Player confirmed build: statue is now assembled!
-                    gw.game_data.parts_no[3] = 1;
-                    ArmStatueReward(gw, "First Statue Confirmed");
-                }
-            }
-            else
-            {
-                // A statue was already assembled
-                if (isCancelStep)
-                {
-                    // Cancelled: revert combination to prior state
+                    // Player cancelled rebuild: revert combination to prior state without re-arming
                     gw.game_data.parts_no[2] = _statueBeforeCustomizer;
                     if (Plugin.Config.AlwaysKeepStatueAssembled.Value)
                     {
                         gw.game_data.parts_no[3] = 1;
                     }
+                    LogState($"Statue rebuild cancelled - reverted combo to 0x{_statueBeforeCustomizer:X2}");
+                }
+            }
+            else
+            {
+                Plugin.Log.LogInfo($"[GuardianDeity] Workshop Exit: CONFIRMED (statueConfirmedInWorkshop=true, combo=0x{currentCombo:X2}, prevCombo=0x{_statueBeforeCustomizer:X2})");
+
+                if (_statueAssembledBeforeCustomizer == 0)
+                {
+                    // Player confirmed first statue: mark assembled and arm blessing
+                    gw.game_data.parts_no[3] = 1;
+                    ArmStatueReward(gw, "First Statue Confirmed");
                 }
                 else
                 {
-                    // Rebuilt/confirmed: re-arm blessing reward!
+                    // Player confirmed rebuild: preserve assembled flag and re-arm blessing
+                    if (Plugin.Config.AlwaysKeepStatueAssembled.Value)
+                    {
+                        gw.game_data.parts_no[3] = 1;
+                    }
                     ArmStatueReward(gw, "Statue Rebuild Confirmed");
                 }
             }
 
-            LogState($"h_shugo.ShugoMain Postfix - Workshop exit (step=0x{step:X2}, before=0x{_statueBeforeCustomizer:X2}, now=0x{gw.game_data.parts_no[2]:X2})");
+            LogState($"Workshop closed (Verdict: {(isCancelled ? "CANCELLED" : "CONFIRMED")}, combo=0x{gw.game_data.parts_no[2]:X2}, assembled={gw.game_data.parts_no[3]})");
         }
         catch (Exception ex)
         {
