@@ -187,9 +187,9 @@ public static class GuardianDeityRepeatRewardsPatch
     /// </summary>
     [HarmonyPatch(typeof(GSD2::OldSrcBase), "eventFlgON")]
     [HarmonyPostfix]
-    public static void EventFlgON_Postfix(short fno, byte bno)
+    public static void EventFlgON_Postfix(int _fno, byte _bno)
     {
-        if (_customizerActive && fno == 148 && (bno & 0x10) != 0)
+        if (_customizerActive && _fno == 148 && (_bno & 0x10) != 0)
         {
             _statueConfirmedInWorkshop = true;
             Plugin.Log.LogInfo("[GuardianDeity] Native statue confirmation detected (Flag 148 bit 0x10 set)!");
