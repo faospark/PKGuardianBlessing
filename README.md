@@ -1,4 +1,4 @@
-# P.K. - Guardian Blessing
+﻿# P.K. - Guardian Blessing
 
 ## Overview
 **PKGuardianBlessing** is an independent quality-of-life mod for *Suikoden II HD Remaster* focusing on Jude's Guardian Deity statue shrine and workshop mechanics:
@@ -28,3 +28,9 @@ Located in `BepInEx/config/faospark.pkguardianblessing.cfg`:
 - **[faospark](https://github.com/faospark)**: Primary Author & Lead Researcher.
 - **Moogles & Mods Discord Community**: For ongoing support, research, collaboration, and keeping the Suikoden modding scene thriving. Join us on the [Moogles & Mods Discord](https://discord.com/invite/bSnpVBV).
 - **Framework**: [BepInEx](https://github.com/BepInEx/BepInEx) & [HarmonyX](https://github.com/BepInEx/HarmonyX).
+
+---
+
+## License
+
+Distributed under the [MIT License](LICENSE).
